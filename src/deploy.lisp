@@ -53,14 +53,15 @@
 (defparameter *haproxy-vhost-name* "feed")
 
 (defprop zfs-encryption-key :posix (path)
-  "Generate a raw 32-byte ZFS encryption key at PATH via `openssl rand`,
-   once, left alone on redeploy."
+  "Generate a raw 32-byte ZFS encryption key at PATH via `openssl rand -out`,
+   once, left alone on redeploy. The key is written directly by openssl to
+   avoid binary corruption through shell capture and string re-encoding."
   (:desc (format nil "ZFS encryption key at ~A" path))
   (:check (remote-exists-p path))
   (:apply
    (containing-directory-exists path)
-   (let ((key (mrun "openssl" "rand" "32")))
-     (write-remote-file path key :mode #o600))))
+   (mrun "openssl" "rand" "-out" path "32")
+   (mrun "chmod" "600" path)))
 
 (defun zfs-create-command (dataset mountpoint keyfile)
   "The `zfs create` command for DATASET at MOUNTPOINT, AES-256-GCM
