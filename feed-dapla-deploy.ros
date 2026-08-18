@@ -26,7 +26,11 @@ exec ros -Q -- $0 "$@"
    provisions the GoToSocial ActivityPub server via DEPLOY-APP. With `e2e`, runs RUN-E2E
    against whatever is already deployed."
   (consfigurator:in-consfig :feed-dapla-deploy/deploy)
-  (unless (member "e2e" argv :test #'string=)
-    (return-from main (deploy-app)))
-  (run-e2e))
+  (cond
+    ((member "e2e" argv :test #'string=)
+     (run-e2e))
+    ((member "decommission" argv :test #'string=)
+     (decommissioned *service-user*))
+    (t
+     (deploy-app))))
 ;;; vim: set ft=lisp lisp:
