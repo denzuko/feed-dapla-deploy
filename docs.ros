@@ -7,17 +7,25 @@ exec ros -Q -- $0 "$@"
   (ros:ensure-asdf)
   (asdf:load-asd (merge-pathnames "feed-dapla-deploy.asd" *load-pathname*))
   #+quicklisp
-  (ql:quickload '(:feed-dapla-deploy/docs :40ants-doc :40ants-doc-full) :silent t))
+  (let ((needed '(:40ants-doc :40ants-doc-full)))
+    (unless (every #'ql-dist:find-system (mapcar #'string-downcase needed))
+      (ql-dist:install-dist "http://dist.ultralisp.org/" :prompt nil))
+    (ql:quickload (cons :feed-dapla-deploy/docs needed) :silent t)))
 
-(defpackage :ros.script.docs
-  (:use :cl))
+(declaim (optimize (speed 3) (safety 1) (debug 1)))
 
-(in-package :ros.script.docs)
+(defpackage :ros.script.docs.3167498364
+  (:use :cl :40ants-doc :feed-dapla-deploy/docs))
+(in-package :ros.script.docs.3167498364)
 
 (defun main (&rest argv)
   (declare (ignore argv))
-  (40ants-doc-full/gh-pages:update-asdf-system-docs
-   :feed-dapla-deploy/docs
-   :root-section 'feed-dapla-deploy/docs::@feed-dapla-deploy
-   :output-dir (merge-pathnames "docs/" (asdf:system-source-directory :feed-dapla-deploy/docs))))
+  (ensure-directories-exist "build/")
+  (let ((markdown (40ants-doc-full/builder:render-to-string
+                    (symbol-value (find-symbol "@FEED-DAPLA-DEPLOY" "FEED-DAPLA-DEPLOY/DOCS"))
+                    :format :markdown)))
+    (with-open-file (out "build/feed-dapla-deploy.md"
+                         :direction :output :if-exists :supersede)
+      (write-string markdown out))
+    (format t "Wrote build/feed-dapla-deploy.md~%")))
 ;;; vim: set ft=lisp lisp:
