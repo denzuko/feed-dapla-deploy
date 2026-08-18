@@ -10,8 +10,22 @@ on:
     types: [published]
 
 jobs:
+  lint:
+    name: Generator lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Roswell
+        run: |
+          curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
+          echo "$HOME/.roswell/bin" >> $GITHUB_PATH
+      - name: Install dapla-deploy-generator
+        run: ros install denzuko/dapla-deploy-generator
+      - name: Lint repo against service.lisp
+        run: dapla-deploy-generator lint .
   build:
-    name: Build and test
+    name: Build
+    needs: lint and test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
