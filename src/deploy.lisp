@@ -31,6 +31,7 @@
            :rootless-service-account
            :images-pulled :quadlets-activated
            :cinix-write-string
+           :*port-base*
            :service-account-uid
            :quadlets-written
            :haproxy-vhost-written
@@ -51,6 +52,11 @@
 (defparameter *data-dataset-keyfile* "/etc/zfs-keys/gotosocial-data.key")
 (defparameter *haproxy-fqdn* "feed.dapla.net")
 (defparameter *haproxy-vhost-name* "feed")
+
+(defparameter *port-base* 10000
+  "Added to the service account UID to derive the loopback PublishPort.
+   Keeps all ports above 1024 and clear of well-known service ranges.")
+
 
 (defprop zfs-encryption-key :posix (path)
   "Generate a raw 32-byte ZFS encryption key at PATH via `openssl rand -out`,
@@ -153,7 +159,7 @@
    configuration; the data mountpoint layout (db + media) maps to
    fediserve's bknr.datastore path and cache.dapla.net media service
    respectively."
-  (let ((port (service-account-uid *service-user*)))
+  (let ((port (+ (service-account-uid *service-user*) *port-base*)))
     `(("Unit" . (("Description" . "GoToSocial ActivityPub server (feed.dapla.net pilot)")
                  ("After"       . "network-online.target")
                  ("Wants"       . "network-online.target")))
@@ -185,7 +191,7 @@
    Content-Type handling for application/activity+json; the backend pass-
    through preserves the Accept header. Backend port is the service account
    UID, per dapla.net convention."
-  (let ((port (service-account-uid *service-user*)))
+  (let ((port (+ (service-account-uid *service-user*) *port-base*)))
     (format nil
 "frontend ~A_http
   bind *:80
@@ -250,7 +256,7 @@ backend ~A_be
   (:desc (format nil "HAProxy vhost written for ~A" *haproxy-fqdn*))
   (:check (null (service-account-uid *service-user*)))
   (:apply
-   (let ((port (service-account-uid *service-user*)))
+   (let ((port (+ (service-account-uid *service-user*) *port-base*)))
      (unless port
        (consfigurator:inapplicable-property
         "Service account ~A does not exist; cannot determine port."
