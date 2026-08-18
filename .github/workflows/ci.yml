@@ -1,0 +1,96 @@
+---
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Roswell
+        run: |
+          curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
+          echo "$HOME/.roswell/bin" >> $GITHUB_PATH
+
+      - name: Install qlot and dependencies
+        run: |
+          ros install qlot
+          qlot install
+
+      - name: Build binary and tarball
+        run: make
+
+      - name: Build docs
+        run: make doc
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: feed-dapla-deploy
+          path: |
+            feed-dapla-deploy.tgz
+            build/usr/local/man/man1/feed-dapla-deploy.1
+
+  sign-and-publish:
+    name: Sign and publish to OCI registry
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'release'
+    permissions:
+      id-token: write
+      contents: write
+      attestations: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: feed-dapla-deploy
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Install ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Compute digest
+        run: sha256sum feed-dapla-deploy.tgz > feed-dapla-deploy.tgz.sha256
+
+      - name: Sign tarball with cosign
+        run: |
+          cosign sign-blob --yes \
+            --output-signature feed-dapla-deploy.tgz.sig \
+            --output-certificate feed-dapla-deploy.tgz.pem \
+            feed-dapla-deploy.tgz
+
+      - name: Push artifact to OCI registry via ORAS
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          oras push oci.dapla.net/denzuko/feed-dapla-deploy:${VERSION} \
+            feed-dapla-deploy.tgz:application/octet-stream \
+            feed-dapla-deploy.tgz.sha256:application/vnd.dapla.sha256 \
+            feed-dapla-deploy.tgz.sig:application/vnd.dev.cosign.simplesigning.v1+json \
+            feed-dapla-deploy.tgz.pem:application/vnd.dev.cosign.certificate.v1+pem
+
+      - name: Attest SLSA provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: feed-dapla-deploy.tgz
+
+      - name: Attach provenance bundle via ORAS
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          oras attach oci.dapla.net/denzuko/feed-dapla-deploy:${VERSION} \
+            --artifact-type application/vnd.dev.cosign.bundle.v1 \
+            feed-dapla-deploy.tgz.bundle:application/vnd.dev.cosign.bundle.v1+json

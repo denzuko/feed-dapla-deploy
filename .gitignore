@@ -1,0 +1,9 @@
+feed-dapla-deploy
+feed-dapla-deploy.tar.gz
+*.fasl
+.qlot/
+qlfile.lock
+docs/
+.DS_Store
+*.swp
+*~

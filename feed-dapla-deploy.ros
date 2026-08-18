@@ -1,0 +1,32 @@
+#!/bin/sh
+#|-*- mode:lisp -*-|#
+#|
+exec ros -Q -- $0 "$@"
+|#
+(progn ;;init forms
+  (ros:ensure-asdf)
+  (asdf:load-asd (merge-pathnames "watch-dapla-deploy.asd" *load-pathname*))
+  #+quicklisp
+  (let ((needed '(:cl-inix :consfigurator :fiveam :dexador)))
+    (unless (every #'ql-dist:find-system (mapcar #'string-downcase needed))
+      (ql-dist:install-dist "http://dist.ultralisp.org/" :prompt nil))
+    (ql:quickload (list* :watch-dapla-deploy/deploy :watch-dapla-deploy/e2e needed)
+                  :silent t)))
+
+(declaim (optimize (speed 3) (safety 1) (debug 1)))
+
+(defpackage :ros.script.watch-dapla-deploy.3167498364
+  (:use :cl :watch-dapla-deploy/deploy :watch-dapla-deploy/e2e)
+  (:export #:main))
+
+(in-package :ros.script.watch-dapla-deploy.3167498364)
+
+(defun main (&rest argv)
+  "Entry point for `./watch-dapla-deploy.ros [e2e]`. Roswell calls this
+   automatically after loading the script. With no arguments, provisions
+   the Invidious stack via DEPLOY-APP. With `e2e`, runs RUN-E2E against
+   whatever is already deployed."
+  (unless (member "e2e" argv :test #'string=)
+    (return-from main (deploy-app)))
+  (run-e2e))
+;;; vim: set ft=lisp lisp:
