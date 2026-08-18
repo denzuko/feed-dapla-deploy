@@ -138,8 +138,7 @@
    configuration; the data mountpoint layout (db + media) maps to
    fediserve's bknr.datastore path and cache.dapla.net media service
    respectively."
-  (let ((port (+ (service-account-uid *service-user*) *port-base*)))
-    `(("Unit" . (("Description" . "GoToSocial ActivityPub server (feed.dapla.net pilot)")
+  `(("Unit" . (("Description" . "GoToSocial ActivityPub server (feed.dapla.net pilot)")
                  ("After"       . "network-online.target")
                  ("Wants"       . "network-online.target")))
       ("Container" . (("Image"         . "oci.dapla.net/superseriousbusiness/gotosocial:latest")
@@ -173,8 +172,7 @@
    Content-Type handling for application/activity+json; the backend pass-
    through preserves the Accept header. Backend port is the service account
    UID, per dapla.net convention."
-  (let ((port (+ (service-account-uid *service-user*) *port-base*)))
-    (format nil
+  (format nil
 "frontend ~A_http
   bind *:80
   acl host_~A hdr(host) -i ~A
@@ -238,12 +236,7 @@ backend ~A_be
   (:desc (format nil "HAProxy vhost written for ~A" *haproxy-fqdn*))
   (:check nil)
   (:apply
-   (let ((port (+ (service-account-uid *service-user*) *port-base*)))
-     (unless port
-       (consfigurator:inapplicable-property
-        "Service account ~A does not exist; cannot determine port."
-        *service-user*))
-     (let* ((cfg-path (format nil "/etc/haproxy/conf.d/~A.cfg" *haproxy-vhost-name*))
+   (let* ((cfg-path (format nil "/etc/haproxy/conf.d/~A.cfg" *haproxy-vhost-name*))
             (new-content (haproxy-vhost-config))
             (current (when (probe-file cfg-path)
                        (uiop:read-file-string cfg-path))))
