@@ -35,6 +35,7 @@
            :service-account-uid
            :quadlets-written
            :haproxy-vhost-written
+           :decommissioned
            :gotosocial-network-sections
            :gotosocial-container-sections
            :haproxy-vhost-config))
@@ -180,7 +181,11 @@
                                                   data-mountpoint))
                       ("Environment"   . "GTS_LETSENCRYPT_ENABLED=false")
                       ("Network"       . "gotosocial.network")
-                      ("Label"         . "io.containers.autoupdate=registry")))
+                      ("Label"         . "io.containers.autoupdate=registry")
+                      ("Label"           . "org.cispec.application=feed-dapla-deploy")
+                      ("Label"           . "org.cispec.managed-by=consfigurator")
+                      ("Label"           . "org.cispec.fqdn=feed.dapla.net")
+                      ("Label"           . "org.cispec.service-account=gotosocial")))
       ("Service" . (("Restart"         . "on-failure")
                     ("TimeoutStartSec" . "60")
                     ("TimeoutStopSec"  . "30")))
@@ -285,6 +290,32 @@ backend ~A_be
   (quadlets-written *service-user* *home-mountpoint* *data-mountpoint*)
   (quadlets-activated *service-user*)
   (haproxy-vhost-written))
+
+
+(defprop decommissioned :posix (user)
+  "Tear down the feed-dapla-deploy stack in least-destructive-first order.
+   Steps:
+     1. Stop all containers in the service account session.
+     2. Remove the HAProxy vhost config and reload HAProxy.
+     3. Terminate the service account login session.
+     4. Disable linger so the account session does not restart.
+     5. Delete the service account.
+     6. Destroy all ZFS datasets (irreversible without a backup).
+     7. Remove the ZFS encryption key files.
+   Confirm a current rsync.net replica or snapshot exists before
+   executing steps 6 and 7."
+  (:desc (format nil "feed-dapla-deploy decommissioned for ~~A" user))
+  (:apply
+   (mrun (format nil "machinectl shell ~~A@ /usr/bin/systemctl --user stop --all" user))
+   (mrun "rm" "-f" (format nil "/etc/haproxy/conf.d/~~A.cfg" *haproxy-vhost-name*))
+   (mrun "systemctl" "reload" "haproxy")
+   (mrun "loginctl" "terminate-user" user)
+   (mrun "loginctl" "disable-linger" user)
+   (mrun "userdel" user)
+   (mrun "zfs" "destroy" "-r" 'storage/users/gotosocial')
+   (mrun "zfs" "destroy" "-r" 'storage/containers/gotosocial')
+   (mrun "rm" "-f" '/etc/zfs-keys/gotosocial-users.key')
+   (mrun "rm" "-f" '/etc/zfs-keys/gotosocial-data.key')))
 
 (defun deploy-app ()
   "Provision the GoToSocial stack via GOTOSOCIAL-HOST (Consfigurator,
