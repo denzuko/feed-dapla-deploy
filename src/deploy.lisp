@@ -216,6 +216,38 @@ backend ~A_be
    (mrun (format nil "machinectl shell ~A@ -- systemctl --user restart gotosocial"
                  user))))
 
+
+(defprop quadlets-written :posix (user home data-mountpoint)
+  "Write all gotosocial quadlet unit files into USER's systemd container
+   directory. The service account UID is read at apply time via getent,
+   after ROOTLESS-SERVICE-ACCOUNT has run, so PublishPort is always correct."
+  (:desc (format nil "Gotosocial quadlet units written for ~A" user))
+  (:apply
+   (let ((quadlet-dir (format nil "~A/.config/containers/systemd" home)))
+     (consfigurator.property.file:containing-directory-exists
+      (format nil "~A/gotosocial.network" quadlet-dir))
+     (write-remote-file
+      (format nil "~A/gotosocial.network" quadlet-dir)
+      (cinix-write-string (gotosocial-network-sections)))
+     (write-remote-file
+      (format nil "~A/gotosocial.container" quadlet-dir)
+      (cinix-write-string (gotosocial-container-sections data-mountpoint))))))
+
+
+(defprop haproxy-vhost-written :posix ()
+  "Write the HAProxy vhost config for this service. Called after
+   ROOTLESS-SERVICE-ACCOUNT has run so service-account-uid resolves
+   correctly, then reloads HAProxy if the content changed."
+  (:desc (format nil "HAProxy vhost written for ~A" *haproxy-fqdn*))
+  (:apply
+   (let* ((cfg-path (format nil "/etc/haproxy/conf.d/~A.cfg" *haproxy-vhost-name*))
+          (new-content (haproxy-vhost-config))
+          (current (when (probe-file cfg-path)
+                     (uiop:read-file-string cfg-path))))
+     (unless (equal new-content current)
+       (write-remote-file cfg-path new-content)
+       (consfigurator.property.service:reloaded "haproxy")))))
+
 (defhost gotosocial-host (:deploy (:local))
   "The GoToSocial host: two AES-256-GCM ZFS datasets (home + data/media),
    rootless service account, linger, pulled image, one quadlet unit, and
@@ -228,18 +260,9 @@ backend ~A_be
   (lingering-enabled *service-user*)
   (images-pulled *service-user*
                   "oci.dapla.net/superseriousbusiness/gotosocial:latest")
-  (has-content
-   (format nil "~A/.config/containers/systemd/gotosocial.network" *home-mountpoint*)
-   (cinix-write-string (gotosocial-network-sections)))
-  (has-content
-   (format nil "~A/.config/containers/systemd/gotosocial.container" *home-mountpoint*)
-   (cinix-write-string (gotosocial-container-sections *data-mountpoint*)))
+  (quadlets-written *service-user* *home-mountpoint* *data-mountpoint*)
   (quadlets-activated *service-user*)
-  (on-change
-      (has-content
-       (format nil "/etc/haproxy/conf.d/~A.cfg" *haproxy-vhost-name*)
-       (haproxy-vhost-config))
-    (reloaded "haproxy")))
+  (haproxy-vhost-written))
 
 (defun deploy-app ()
   "Provision the GoToSocial stack via GOTOSOCIAL-HOST (Consfigurator,
