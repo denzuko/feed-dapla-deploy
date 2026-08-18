@@ -13,6 +13,8 @@ exec ros -Q -- $0 "$@"
     (ql:quickload (list* :watch-dapla-deploy/deploy :watch-dapla-deploy/e2e needed)
                   :silent t)))
 
+(consfigurator:in-consfig :feed-dapla-deploy/deploy)
+
 (declaim (optimize (speed 3) (safety 1) (debug 1)))
 
 (defpackage :ros.script.watch-dapla-deploy.3167498364

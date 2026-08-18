@@ -122,14 +122,19 @@
 (defun service-account-uid (username)
   "Read USERNAME's UID from the local passwd database via getent, at
    property apply time after ROOTLESS-SERVICE-ACCOUNT has run. The UID
-   is used as the loopback PublishPort, per dapla.net convention."
-  (parse-integer
-   (third
-    (uiop:split-string
-     (string-trim '(#\Newline #\Space)
-       (with-output-to-string (s)
-         (uiop:run-program (list "getent" "passwd" username) :output s)))
-     :separator '(#\:)))))
+   is used as the loopback PublishPort, per dapla.net convention.
+   Returns NIL if the account does not yet exist, allowing callers to
+   skip operations that depend on the UID."
+  (let ((raw (with-output-to-string (s)
+               (uiop:run-program (list "getent" "passwd" username)
+                                 :output s
+                                 :ignore-error-status t))))
+    (when (and raw (plusp (length (string-trim '(#\Newline #\Space) raw))))
+      (parse-integer
+       (third
+        (uiop:split-string
+         (string-trim '(#\Newline #\Space) raw)
+         :separator '(#\:)))))))
 
 (defun gotosocial-network-sections ()
   "Cinix AST for gotosocial.network: internal-only network."
@@ -238,18 +243,24 @@ backend ~A_be
 
 
 (defprop haproxy-vhost-written :posix ()
-  "Write the HAProxy vhost config for this service. Called after
-   ROOTLESS-SERVICE-ACCOUNT has run so service-account-uid resolves
-   correctly, then reloads HAProxy if the content changed."
+  "Write the HAProxy vhost config for this service. Skipped when the
+   service account does not yet exist, since the port cannot be determined.
+   Reloads HAProxy only when content changes."
   (:desc (format nil "HAProxy vhost written for ~A" *haproxy-fqdn*))
+  (:check (null (service-account-uid *service-user*)))
   (:apply
-   (let* ((cfg-path (format nil "/etc/haproxy/conf.d/~A.cfg" *haproxy-vhost-name*))
-          (new-content (haproxy-vhost-config))
-          (current (when (probe-file cfg-path)
-                     (uiop:read-file-string cfg-path))))
-     (unless (equal new-content current)
-       (write-remote-file cfg-path new-content)
-       (consfigurator.property.service:reloaded "haproxy")))))
+   (let ((port (service-account-uid *service-user*)))
+     (unless port
+       (consfigurator:inapplicable-property
+        "Service account ~A does not exist; cannot determine port."
+        *service-user*))
+     (let* ((cfg-path (format nil "/etc/haproxy/conf.d/~A.cfg" *haproxy-vhost-name*))
+            (new-content (haproxy-vhost-config))
+            (current (when (probe-file cfg-path)
+                       (uiop:read-file-string cfg-path))))
+       (unless (equal new-content current)
+         (write-remote-file cfg-path new-content)
+         (consfigurator.property.service:reloaded "haproxy"))))))
 
 (defhost gotosocial-host (:deploy (:local))
   "The GoToSocial host: two AES-256-GCM ZFS datasets (home + data/media),
