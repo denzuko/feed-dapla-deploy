@@ -282,10 +282,10 @@ backend ~A_be
    (mrun "loginctl" "terminate-user" user)
    (mrun "loginctl" "disable-linger" user)
    (mrun "userdel" user)
-   (mrun "zfs" "destroy" "-r" 'storage/users/gotosocial')
-   (mrun "zfs" "destroy" "-r" 'storage/containers/gotosocial')
-   (mrun "rm" "-f" '/etc/zfs-keys/gotosocial-users.key')
-   (mrun "rm" "-f" '/etc/zfs-keys/gotosocial-data.key')))
+   (mrun "zfs" "destroy" "-r" "storage/users/gotosocial")
+   (mrun "zfs" "destroy" "-r" "storage/containers/gotosocial")
+   (mrun "rm" "-f" "/etc/zfs-keys/gotosocial-users.key")
+   (mrun "rm" "-f" "/etc/zfs-keys/gotosocial-data.key")))
 
 (defun deploy-app ()
   "Provision the GoToSocial stack via GOTOSOCIAL-HOST (Consfigurator,
