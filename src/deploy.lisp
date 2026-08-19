@@ -30,6 +30,8 @@
            :zfs-encryption-key :zfs-dataset-mounted
            :rootless-service-account :images-pulled
            :cinix-write-string
+           :gotosocial-network-sections
+           :gotosocial-container-sections
            :quadlets-written :quadlets-activated
            :haproxy-vhost-config :haproxy-vhost-written
            :decommissioned))
@@ -117,7 +119,7 @@
                    ("Subnet"      . "10.89.2.20/30")
                    ("Gateway"     . "10.89.2.21")))))
 
-(defun gotosocial-container-sections (data-mountpoint)
+(defun gotosocial-container-sections ()
   "Cinix AST for feed.container. HAProxy backend: 10.89.2.21:8080."
   `(("Unit" . (("Description" . "GoToSocial ActivityPub server (feed.dapla.net pilot)")))
     ("Container" . (("Image"         . "oci.dapla.net/superseriousbusiness/gotosocial:latest")
@@ -127,11 +129,12 @@
                       ("Environment" . "GTS_PROTOCOL=https")
                       ("Environment" . "GTS_PORT=8080")
                       ("Environment" . "GTS_DB_TYPE=sqlite")
-                      ("Environment" . ,(format nil "GTS_DB_SQLITE_ADDRESS=~A/gotosocial.db" data-mountpoint))
+                      ("Environment" . "GTS_DB_SQLITE_ADDRESS=/gotosocial/storage/gotosocial.db")
                       ("Environment" . "GTS_STORAGE_BACKEND=local")
-                      ("Environment" . ,(format nil "GTS_STORAGE_LOCAL_BASE_PATH=~A/media" data-mountpoint))
+                      ("Environment" . "GTS_STORAGE_LOCAL_BASE_PATH=/gotosocial/storage/media")
                       ("Environment" . "GTS_LETSENCRYPT_ENABLED=false")
-                    ("Volume" . ,(format nil "~A:/gotosocial/storage:Z" data-mountpoint))
+                    ("Volume" . "%h:/var/lib/gotosocial:ro")
+                    ("Volume" . "/srv/%U:/gotosocial/storage:Z")
                     ("Network"       . "feed.network")
                     ("Label"         . "io.containers.autoupdate=registry")
                     ("Label"         . "org.cispec.application=feed-dapla-deploy")
@@ -171,7 +174,7 @@ backend feed_be
   server gotosocial 10.89.2.21:8080 check inter 10s rise 2 fall 3
 "))
 
-(defprop quadlets-written :posix (user home data-mountpoint)
+(defprop quadlets-written :posix (user home)
   "Write all feed quadlet unit files into USER's systemd container directory."
   (:desc (format nil "GoToSocial ActivityPub server (feed.dapla.net pilot) quadlet units written for ~A" user))
   (:apply
@@ -180,7 +183,7 @@ backend feed_be
      (write-remote-file (format nil "~A/feed.network" quadlet-dir)
                         (cinix-write-string (gotosocial-network-sections)))
      (write-remote-file (format nil "~A/feed.container" quadlet-dir)
-                        (cinix-write-string (gotosocial-container-sections data-mountpoint))))))
+                        (cinix-write-string (gotosocial-container-sections))))))
 
 (defprop quadlets-activated :posix (user)
   "Reload USER's user-scope systemd daemon and restart feed services."
